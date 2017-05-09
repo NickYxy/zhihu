@@ -1,3 +1,17 @@
+#zhihu project ignore list
+config/key.py
+demo/*.gif
+
+#avatar
+static/user_avatar/*_*.png
+static/topic_avatar/*.png
+
+*.sqlite
+chat.sqlite.*
+.vagrant/
+
+
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
