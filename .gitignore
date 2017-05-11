@@ -1,6 +1,8 @@
 #zhihu project ignore list
 config/key.py
 demo/*.gif
+workspace.xml
+just for practice.py
 
 #avatar
 static/user_avatar/*_*.png
