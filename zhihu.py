@@ -2,15 +2,18 @@ import logging
 from flask import Flask
 from flask_script import Manager
 
+
 app = Flask(__name__)
 
 manager = Manager(app)
 
 
-
-@app.route('/')
-def hello_world():
-    return 'Hello World!'
+@app.route('/login')
+def user_login():
+    return
+# def register_routes(app):
+#     from routes.user import main as routes_user
+#     app.register_blueprint(routes_user, url_prefix='/user')
 
 
 def configure_app():
