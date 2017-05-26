@@ -3,6 +3,7 @@ from models.user import User
 from decimal import Decimal
 from flask import current_app as app
 from flask.blueprints import *
+from flask import flash
 
 
 main = Blueprint('user', __name__)
@@ -25,8 +26,9 @@ def login():
     u = User.find_one(username=username)
     if u is not None and u.validate_login(form):
         session['uid'] = u.id
-        return redirect(url_for('index.index'))
+        return redirect(url_for('user.dashboard'))
     else:
+        flash('用户名密码错误', 'warning')
         return redirect(url_for('user.index'))
 
 
@@ -40,25 +42,36 @@ def register():
     form = request.form
     captcha = form.get('captcha', '').lower()
     if captcha != session.get('captcha', 'no captcha!'):
+        flash('验证码错误', 'warning')
         return redirect(url_for('user.register'))
     status, msgs = User.valid(form)
     if status is True:
         u = User.new(form)
         u.send_email_verify(u.email)
         session['uid'] = u.id
-        return redirect(url_for('index.index'))  # TODO 邮件重置密码
+        flash('验证邮件已发送，请查收', 'info')
+        return redirect(url_for('user.dashboard'))  # TODO 邮件重置密码
     else:
-        return redirect(url_for('user.register'))  # TODO 改为flash提示
+        for msg in msgs:
+            flash(msg, 'warning')
+            return redirect(url_for('user.register'))  # TODO 改为flash提示
 
 
-@main.route('/reset_password/<tb64>', methods=['POST'])
-def reset_password(tb64):
-    password = request.form.get('password', '')
-    if User.forget_password_verify(tb64):
-        u = User.get_user_by_tb64(tb64)
-        u.reset_password(password)
-        session['uid'] = u.id
-        return redirect(url_for('index.index'))
+@main.route('/password/forget')
+def forget_password():
+    if current_user() is not None:
+        return redirect(url_for('user.dashboard'))
+    return render_template(url_for('user/forget_password.html'))
+
+
+@main.route('/reset_password/', methods=['POST'])
+def forget_password_send():
+    form = request.form
+    captcha  = form.get('captcha', '').lower()
+    if captcha != session.get('captcha', 'no captcha!'):
+        flash('验证码错误', 'warning')
+        return redirect(url_for('user.forget_password'))
+    r = User.forget_password(form)
 
 
 @main.route('/profile')

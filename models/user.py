@@ -1,10 +1,16 @@
 import hashlib
+import base64
 from enum import Enum
 from decimal import Decimal
 from . import MongoModel
 from . import timestamp
 from . import safe_list_get
-from .title import Title
+from . import short_uuid
+from . import bool_dict
+from decimal import Decimal
+from . import safe_list_get
+from .mail import send_verify_email
+from .mail import send_password_email
 from flask import current_app as app
 
 
@@ -19,14 +25,14 @@ class User(MongoModel):
     def _fields(cls):
         fields = [
             ('username', str, ''),
-            ('nickname', str, ''),
+            ('email', str, ''),
+            ('email_verify', bool, False),
+            ('email_token', str, ''),
+            ('email_token_exp', int, 0),
             ('password', str, ''),
-            ('avatar', str, 'default.png'),
             ('role', str, 'client'),
             ('salt', str, 'q43129dhs*3'),
-            ('cart', dict, {}),
-            ('add_list', list, []),
-            ('add_default', int, 0),
+            ('pics', list, []),
         ]
         fields.extend(super()._fields())
         return fields
@@ -43,6 +49,10 @@ class User(MongoModel):
         form.pop('role', '')
         password = form.pop('password', '')
         re_password = form.pop('re_password', '')
+        email_verify = form.pop('email_verify', 'true')
+        form['email_verify'] = bool_dict.get(email_verify, False)
+        if (self.email_exist(form.get('email'))):
+            form.pop('email')
         self.update(form)
         if len(password) > 0 and password == re_password:
             self.password = self.salted_password(password)
@@ -114,20 +124,111 @@ class User(MongoModel):
         hash2 = hashlib.sha1((hash1 + salt).encode('ascii')).hexdigest()
         return hash2
 
-    # def get_title_detail(self):
-    #     title = self.title
-    #     tl = []
-    #     try:
-    #         for k, v in title.items():
-    #             t = Title.find_one(uuid=k)
-    #             t.count = v
-    #             print(t.sum)
-    #             tl.append(t)
-    #     except AttributeError:
-    #         self.cart_clear()
-    #     return tl
 
-    def get_title_count(self):
-        title = self.title
-        return sum([v for k, v in title.items()])
+    def send_email_verify(self, email):
+        tb64 = self.se
 
+
+    def set_token(self, email):
+        token = '{}-{}'.format(short_uuid(), email)
+        self.email_token = token
+        self.email_token_exp = timestamp() + 3600
+        self.save()
+        tb64 = self.encode_email_token(token)
+        return tb64
+
+    @classmethod
+    def sha1_email_token(token):
+        return hashlib.sha1(token.encode('ascii')).hexdigest()
+
+    def encode_email_token(self, token):
+        token_sha1 = self.sha1_email_token(token)
+        s = '{}-{}'.format(self.uuid, token_sha1)
+        tb64 = base64.b64encode(s.encode('ascii'))
+        return tb64
+
+    @classmethod
+    def email_verify(cls, tb64):
+        s = cls.safe_decode_b64(tb64)
+        if s is None:
+            return False
+        uuid, token_sha1 = s.split('-', 1)
+        u = cls.get_uuid(uuid)
+        if u.email_token_valid(token_sha1):
+            u.email = u.email_token.split('-')[1]
+            u.email_verify = True
+            u.save()
+            u.clear_token()
+            return True
+        else:
+            return False
+
+    def email_token_valid(self, token_sha1):
+        now = timestamp()
+        if now > self.email_token_exp:
+            return False
+        return token_sha1 == self.sha1_email_token(self.email_token)
+
+    def email_exist(self, email):
+        if self.has(email=email) and self.find_one(email=email).uuid != self.uuid:
+            return True
+        else:
+            return False
+
+    def email_verified(self):
+        if len(self.email) <= 0:
+            return False
+        return self.email_verify
+
+    @classmethod
+    def forget_password(cls, form):
+        username = form.get('username')
+        email = form.get('email')
+        u = cls.find_one(username=username)
+        if u is not None and u.email_verified() and u.email == email:
+            tb64 = u.set_token(email)
+            send_password_email(email, tb64)
+            return True
+        return False
+
+    @classmethod
+    def forget_password_verify(cls, tb64):
+        s = cls.safe_decode_b64(tb64)
+        if s is None:
+            return False
+        uuid, token_sha1 = s.split('-', 1)
+        u = cls.get_uuid(uuid)
+        if u.email_token_valid(token_sha1):
+            return True
+        else:
+            return False
+
+    @classmethod
+    def get_user_by_tb64(cls, tb64):
+        s = cls.safe_decode_b64(tb64)
+        if s is None:
+            return None
+        uuid, token_sha1 = s.split('-', 1)
+        u = cls.get_uuid(uuid)
+        if u.email_token_valid(token_sha1):
+            return u
+        else:
+            return None
+
+    def reset_password(self, password):
+        self.password = self.salted_password(password)
+        self.save()
+        self.clear_token()
+        return self
+
+    def clear_token(self):
+        self.email_token = ''
+        self.email_token_exp = 0
+        self.save()
+
+    @staticmethod
+    def safe_decode_b64(tb64):
+        try:
+            return base64.b64decode(tb64).decode('ascii')
+        except:
+            return None

@@ -199,3 +199,7 @@ class MongoModel(object):
             kwargs[field] = new_uuid
         setattr(self, field, new_uuid)
         self.save()
+
+    @classmethod
+    def get_uuid(cls, uuid):
+        return cls.find_one(uuid=uuid)
