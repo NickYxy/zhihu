@@ -1,5 +1,5 @@
 from flask import request
-from flask import blueprints
+from flask.blueprints import Blueprint
 from flask import jsonify
 from flask import redirect
 from flask import render_template
